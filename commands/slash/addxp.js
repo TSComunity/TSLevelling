@@ -61,6 +61,8 @@ async run(client, int, tools) {
 
     client.db.update(int.guild.id, { $set: { [`users.${user.id}.xp`]: newXP } }).then(() => {
         int.reply(`${newXP > xp ? "⏫" : "⏬"} ${user.displayName} now has **${tools.commafy(newXP)}** XP${newLevel != level ? ` and is **level ${newLevel}**` : ""}! (previously ${tools.commafy(xp)}, ${xpDiff >= 0 ? "+" : ""}${tools.commafy(xpDiff)})`)
-    }).catch(() => tools.warn("Something went wrong while trying to modify XP!"))
-
+}).catch((e) => {
+    const msg = `Something went wrong while trying to modify XP! \`\`\`${e.message}\`\`\``;
+    tools.warn(msg.length > 2000 ? msg.substring(0, 1997) + '...' : msg);
+})
 }}
