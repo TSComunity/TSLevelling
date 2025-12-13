@@ -130,7 +130,7 @@ Object.entries(settings).forEach(x => {
 
 const schema = { 
     _id: String,
-    users: { type: Object }, // xp, cooldown, hidden. should be validated but it just slows things down
+    users: { type: Array }, // xp, cooldown, hidden. should be validated but it just slows things down
     settings: settingsObj,
     info: {
         lastUpdate: { type: Number, default: 0 },
