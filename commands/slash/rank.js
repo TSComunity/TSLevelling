@@ -1,4 +1,16 @@
 const multiplierModes = require("../../json/multiplier_modes.json")
+const {
+  ActionRowBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MediaComponentBuilder,
+  ThumbnailBuilder,
+  SectionBuilder,
+  SeparatorBuilder,
+  MessageFlags,
+  EmbedBuilder
+} = require('discord.js')
+const ranks = require("../../consts/ranks.js")
 
 module.exports = {
 metadata: {
@@ -35,6 +47,16 @@ async run(client, int, tools) {
     let levelData = tools.getLevel(xp, db.settings, true)       // get user's level
     let maxLevel = levelData.level >= db.settings.maxLevel      // check if level is maxxed
 
+    const levelRoles = tools.getRolesForLevel(
+    levelData.level,
+    db.settings.rewards
+    )
+
+    const levelRole = levelRoles[0] || null
+    const levelRoleId = levelRole?.id
+    const rank = ranks.find(r => r.roles.some(role => role.role_id === levelRoleId)) || null
+    const role = rank.roles.find(r => r.role_id === levelRoleId) || null
+
     let remaining = levelData.xpRequired - xp
     let levelPercent = maxLevel ? 100 : (xp - levelData.previousLevel) / (levelData.xpRequired - levelData.previousLevel) * 100
 
@@ -69,6 +91,7 @@ async run(client, int, tools) {
             { name: "⏩ Next level", value: !maxLevel ? nextLevelXP : "Max level! Woah!", inline: true },
         ]
     })
+    let embed = new ContainerBuilder()
 
     if (!db.settings.rankCard.hideCooldown) {
         let foundCooldown = currentXP.cooldown || 0

@@ -119,7 +119,6 @@ app.get("/invite/:id?", (req, res) => {
 app.get("/api/loggedin", async function(req, res) {
     let botPublic = await botIsPublic()
     let info = await getDiscordInfo(req, true)
-    console.log(info)
     return res.send({ login: info ? { id: info.id, username: info.username } : null, botPublic })
 })
 
