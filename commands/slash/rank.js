@@ -93,21 +93,21 @@ module.exports = {
 
     if ((!hideMult || multiplierData.role === 0) && multRoles.length) {
       let xpStr = multiplierData.role > 0 ? `${multiplierData.role}x XP` : "No se puede ganar XP!"
-      let roleMultiplierStr = multRoles.length === 1 ? `${int.guild.id != multRoles[0].id ? `<@&${multRoles[0].id}>` : "Everyone"} - ${xpStr}` : `**${multRoles.length} roles** - ${xpStr}`
+      let roleMultiplierStr = multRoles.length === 1 ? `${int.guild.id != multRoles[0].id ? `- <@&${multRoles[0].id}>` : "Everyone"} - ${xpStr}` : `- **${multRoles.length} roles** - ${xpStr}`
       multiplierInfo.push(roleMultiplierStr)
     }
 
     let multChannels = multiplierData.channelList
     if ((!hideMult || multiplierData.channel === 0) && multChannels.length && multiplierData.role > 0 && (multiplierData.role != 1 || multiplierData.channel != 1)) {
       let chXPStr = multChannels[0].boost > 0 ? `${multiplierData.channel}x XP` : "No se puede ganar XP!"
-      let chMultiplierStr = `<#${multChannels[0].id}> - ${chXPStr}`
+      let chMultiplierStr = `- <#${multChannels[0].id}> - ${chXPStr}`
       multiplierInfo.push(chMultiplierStr)
-      if (multRoles.length) multiplierInfo.push(`**{multiplier}x XP** (${multiplierModes.channelStacking[multiplierData.channelStacking].toLowerCase()})`)
+      if (multRoles.length) multiplierInfo.push(`- **{multiplier}x XP** (${multiplierModes.channelStacking[multiplierData.channelStacking].toLowerCase()})`)
     }
 
     if (multiplierInfo.length) {
       container.addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:** ${multiplierInfo.join("\n")}`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:**\n${multiplierInfo.join("\n")}`))
         .addSeparatorComponents(new SeparatorBuilder())
         .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
     } else if (!db.settings.rewardSyncing.noManual && !db.settings.rewardSyncing.noWarning) {
@@ -116,6 +116,9 @@ module.exports = {
         .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
         .addSeparatorComponents(new SeparatorBuilder())
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**⚠ Nota:** ¡Tus roles de nivel no están sincronizados correctamente! Escribe ${tools.commandTag("sync")} para solucionarlo.`))
+    } else {
+        container.addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
     }
 
     let isHidden = db.settings.rankCard.ephemeral || !!int.options.get("hidden")?.value
