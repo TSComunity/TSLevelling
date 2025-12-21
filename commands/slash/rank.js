@@ -106,19 +106,23 @@ module.exports = {
     }
 
     if (multiplierInfo.length) {
-      container.addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:**\n${multiplierInfo.join("\n")}`))
-        .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
-    } else if (!db.settings.rewardSyncing.noManual && !db.settings.rewardSyncing.noWarning) {
-      let syncCheck = tools.checkLevelRoles(int.guild.roles.cache, member.roles.cache, levelData.level, db.settings.rewards)
-      if (syncCheck.incorrect.length || syncCheck.missing.length) container.addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
-        .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**⚠ Nota:** ¡Tus roles de nivel no están sincronizados correctamente! Escribe ${tools.commandTag("sync")} para solucionarlo.`))
-    } else {
         container.addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:**\n${multiplierInfo.join("\n")}`))
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
+    } else {
+        // Siempre mostrar la barra de progreso aunque no haya buffies ni problemas de sincronización
+        container.addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')));
+
+        // Y solo mostrar el warning si corresponde
+        if (!db.settings.rewardSyncing.noManual && !db.settings.rewardSyncing.noWarning) {
+            let syncCheck = tools.checkLevelRoles(int.guild.roles.cache, member.roles.cache, levelData.level, db.settings.rewards);
+            if (syncCheck.incorrect.length || syncCheck.missing.length) {
+                container.addSeparatorComponents(new SeparatorBuilder())
+                    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**⚠ Nota:** ¡Tus roles de nivel no están sincronizados correctamente! Escribe ${tools.commandTag("sync")} para solucionarlo.`))
+            }
+        }
     }
 
     let isHidden = db.settings.rankCard.ephemeral || !!int.options.get("hidden")?.value
