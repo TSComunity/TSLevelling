@@ -209,7 +209,7 @@ class Tools {
             return this.warn(user.bot ? "*noBotXP" : user.id != int.user.id ? `${user.displayName} doesn't have any XP yet!` : `You don't have any XP yet!`)
         }
 
-        // creates an embed from an object, because i despise how discord.js does it
+        // crea un embed desde un objeto, porque desprezar cómo lo hace discord.js
         this.createEmbed = function(options={}) {
             let embed = new Discord.EmbedBuilder()
             if (options.title) embed.setTitle(options.title)
@@ -268,6 +268,53 @@ class Tools {
                 disabledBtns = disabledBtns.filter(x => x.customId == selected.customId)
             }
             return this.row(disabledBtns)
+        }
+
+        this.getRank = async function(userID, serverID=int.guild.id) {
+            // obtenemos todos los usuarios con XP
+            let data = await this.fetchAll(serverID)
+            if (!data?.users) return null
+
+            // convertimos a array y ordenamos de mayor a menor XP
+            let usersArray = this.xpObjToArray(data.users)
+            usersArray.sort((a, b) => (b.xp || 0) - (a.xp || 0))
+
+            // buscamos la posición del usuario
+            let rank = usersArray.findIndex(u => u.id === userID)
+            if (rank === -1) return null
+
+            return rank + 1  // +1 porque el índice empieza en 0
+        }
+
+        // retorna datos para adelantar al siguiente usuario con más XP
+        // devuelve: { targetUserID, targetXP, belowXP, myXP, xpNeeded }
+        this.getXPToOvertake = async function(memberID, serverID=int.guild.id) {
+            let data = await this.fetchAll(serverID)
+            if (!data?.users) return null
+
+            let usersArray = this.xpObjToArray(data.users)
+                .filter(u => u.xp > 0)
+                .sort((a, b) => (b.xp || 0) - (a.xp || 0))
+
+            let myIndex = usersArray.findIndex(u => u.id === memberID)
+            if (myIndex === -1) return null
+
+            let myXP = usersArray[myIndex].xp || 0
+
+            // usuario directamente encima (menor índice = más XP)
+            let above = myIndex > 0 ? usersArray[myIndex - 1] : null
+            // usuario directamente debajo (mayor índice = menos XP), usado como ancla de inicio de la barra
+            let below = myIndex < usersArray.length - 1 ? usersArray[myIndex + 1] : null
+
+            return {
+                targetUserID: above?.id || null,
+                targetXP: above?.xp || 0,
+                belowXP: below?.xp || 0,
+                targetLevel: this.getLevel(above?.xp || 0, data.settings),
+                myXP: myXP,
+                xpNeeded: above ? (above.xp || 0) - myXP + 1 : 0,
+
+            }
         }
 
         // creates a timed yes/no confirmation (options: secs, buttons, message, timeoutMessage, onClick, onTimeout)
