@@ -199,6 +199,11 @@ class Tools {
             return obj
         }
 
+        this.getIndividualRoleMultiplier = function(roleID, settings) {
+            const roleConfig = settings.multipliers.roles.find(r => r.id === roleID);
+            return roleConfig ? roleConfig.boost : 1;
+        }
+
         // error message if user has no xp
         this.noXPYet = function(user) {
             return this.warn(user.bot ? "*noBotXP" : user.id != int.user.id ? `${user.displayName} doesn't have any XP yet!` : `You don't have any XP yet!`)

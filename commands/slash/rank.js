@@ -65,15 +65,15 @@ module.exports = {
       const maxLength = 28
 
       // Nivel 1: texto completo
-      let text = `**${total} ${total > 0 ? 'mensajes' : 'mensaje'}** (${monthly} este mes)`
+      let text = `**${total} ${total === 1 ? 'mensaje' : 'mensajes'}** (${monthly} este mes)`
       if (text.length <= maxLength) return text
 
       // Nivel 2: compactar "mensajes"
-      text = `**${total} ${total > 0 ? 'msgs' : 'msg'}** (${monthly} este mes)`
+      text = `**${total} ${total === 1 ? 'msg' : 'msgs'}** (${monthly} este mes)`
       if (text.length <= maxLength) return text
 
       // Nivel 3: quitar "este"
-      text = `**${total} ${total > 0 ? 'msgs' : 'msg'}** (${monthly} mes)`
+      text = `**${total} ${total === 1 ? 'msg' : 'msgs'}** (${monthly} mes)`
       return text
     }
 
@@ -97,7 +97,7 @@ module.exports = {
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent([
             `## ${role.emoji} <@&${role.id}>`,
-            `**<:XP:1452305794136543263>** **Nivel ${levelData.level}** (${tools.commafy(xp)} XP)`,
+            `**<:XP:1467192533812645939>** **Nivel ${levelData.level}** (${tools.commafy(xp)} XP)`,
             `**<:messages:1467163578699354235>** ${formatMessagesLine(totalMsgs, monthlyMsgs)}`,
             `**<:next_level:1452305752390766633>** ${nextLevelXP}`,
             `**<:cooldown:1452305790495887515>** ${cooldown}`
@@ -107,22 +107,35 @@ module.exports = {
       )
 
     let hideMult = db.settings.hideMultipliers
-    let multRoles = multiplierData.roleList
+    let multRoles = multiplierData.roleList?.reverse()
     let multiplierInfo = []
 
     if ((!hideMult || multiplierData.role === 0) && multRoles.length) {
+      let i = 0
+
       for (const role of multRoles) {
+
         const xpStr =
-          multiplierData.role > 0
-            ? `${multiplierData.role}x XP`
-            : "No se puede ganar XP!"
+          tools.getIndividualRoleMultiplier(role.id, db.settings) > 0
+            ? `${tools.getIndividualRoleMultiplier(role.id, db.settings)}x XP`
+            : "No puede ganar XP";
+
+        const keys = [
+          '<:key_1:1467191504677240949>',
+          '<:key_2:1467191508011581440>',
+          '<:key_3:1467191509064351989>',
+          '<:key_4:1467191992004907211>',
+        ];
+
+        const key = keys[i % keys.length];
 
         const roleStr =
-          int.guild.id != role.id
-            ? `- <@&${role.id}> - ${xpStr}`
-            : `- Everyone - ${xpStr}`
+          int.guild.id !== role.id
+            ? `- ${key} <@&${role.id}> - ${xpStr}`
+            : `- **Everyone** • ${xpStr}`;
 
-        multiplierInfo.push(roleStr)
+        multiplierInfo.push(roleStr);
+        i++;
       }
     }
 
@@ -151,7 +164,9 @@ module.exports = {
 
     if (multiplierInfo.length) {
         container.addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:**\n${multiplierInfo.join("\n")}`))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies - ${multiplier}x XP:**`))
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(multiplierInfo.join('\n')))
             .addSeparatorComponents(new SeparatorBuilder())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(progressBar))
             .addSeparatorComponents(new SeparatorBuilder())
