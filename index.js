@@ -6,7 +6,7 @@ const config = require("./config.json")
 const Tools = require("./classes/Tools.js")
 const Model = require("./classes/DatabaseModel.js")
 
-// automatic files: these handle discord status and version number, manage them with the dev commands
+// automatic files: these handle discorad status and version number, manage them with the dev commands
 const autoPath = "./json/auto/"
 if (!fs.existsSync(autoPath)) fs.mkdirSync(autoPath)
 if (!fs.existsSync(autoPath + "status.json")) fs.copyFileSync("./json/default_status.json", autoPath + "status.json")
@@ -57,7 +57,7 @@ client.updateStatus = function() {
 }
 
 // when online
-client.on("ready", () => {
+client.on("clientReady", () => {
     if (client.shard.id == client.shard.count - 1) console.log(`Bot online! (${+process.uptime().toFixed(2)} secs)`)
     client.startupTime = Date.now() - startTime
     client.version = version

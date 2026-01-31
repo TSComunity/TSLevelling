@@ -31,6 +31,8 @@ module.exports = {
 
     let xp = currentXP.xp
     let levelData = tools.getLevel(xp, db.settings, true)
+    let totalMsgs = tools.commafy(tools.commafy(tools.getMessages(currentXP)))
+    let monthlyMsgs = tools.commafy(tools.commafy(tools.getMonthlyMessages(currentXP)))
     let maxLevel = levelData.level >= db.settings.maxLevel
 
     const levelRoles = tools.getRolesForLevel(levelData.level, db.settings.rewards)
@@ -45,19 +47,36 @@ module.exports = {
     let multiplierData = tools.getMultiplier(member, db.settings)
     let multiplier = multiplierData.multiplier
 
-    let barSize = 33
+    let barSize = 21 // 33
     let barRepeat = Math.round(levelPercent / (100 / barSize))
-    let progressBar = `${"▓".repeat(barRepeat)}${"░".repeat(barSize - barRepeat)} (${!maxLevel ? Number(levelPercent.toFixed(2)) + "%" : "MAX"})`
+    let progressBar = `${"<:star_drop:1467144088779489311>".repeat(barRepeat)}${"<:star_drop_ghost:1467145846973010185>".repeat(barSize - barRepeat)} (${!maxLevel ? Number(levelPercent.toFixed(2)) + "%" : "MAX"})`
 
     let estimatedMin = Math.ceil(remaining / (db.settings.gain.min * (multiplier || multiplierData.role)))
     let estimatedMax = Math.ceil(remaining / (db.settings.gain.max * (multiplier || multiplierData.role)))
     let estimatedRange = (estimatedMax === estimatedMin) ? `${tools.commafy(estimatedMax)} ${tools.extraS("mensaje", estimatedMax)}` : `${tools.commafy(estimatedMax)}-${tools.commafy(estimatedMin)} mensajes`
 
-    let nextLevelXP = (db.settings.rankCard.relativeLevel ? `${tools.commafy(xp - levelData.previousLevel)}/${tools.commafy(levelData.xpRequired - levelData.previousLevel)}` : `${tools.commafy(levelData.xpRequired)}`) + ` (${tools.commafy(remaining)} más)`
+    let nextLevelXP = `${tools.commafy(remaining)} XP para subir`
 
     let memberAvatar = member.displayAvatarURL()
     let foundCooldown = currentXP.cooldown || 0
     let cooldown = foundCooldown > Date.now() ? tools.timestamp(foundCooldown - Date.now()) : "Sin Cooldown!"
+
+    function formatMessagesLine(total, monthly) {
+      const icon = "**<:messages:1467163578699354235>** "
+      const maxLength = "67.893 msgs (12.032 mes)".length
+
+      // Nivel 1: texto completo
+      let text = `**${total} mensajes** (${monthly} este mes)`
+      if (text.length <= maxLength) return icon + text
+
+      // Nivel 2: compactar "mensajes"
+      text = `**${total} msgs** (${monthly} este mes)`
+      if (text.length <= maxLength) return icon + text
+
+      // Nivel 3: quitar "este"
+      text = `**${total} msgs** (${monthly} mes)`
+      return icon + text
+    }
 
     // Crear attachment del banner
     const bannerPath = path.join(__dirname, "../../assets/banners/", rank.banner.url)
@@ -79,9 +98,10 @@ module.exports = {
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent([
             `## ${role.emoji} <@&${role.id}>`,
-            `**<:XP:1452305794136543263> XP:** ${tools.commafy(xp)} (lvl ${levelData.level})`,
-            `**<:next_level:1452305752390766633> Siguiente Nivel:** ${nextLevelXP}`,
-            `**<:cooldown:1452305790495887515> Cooldown:** ${cooldown}`
+            `**<:XP:1452305794136543263>** **Nivel ${levelData.level}** (${tools.commafy(xp)} XP)`,
+            `**<:messages:1467163578699354235>** **${totalMsgs} ${totalMsgs > 0 ? 'msgs' : 'msg'}** (${monthlyMsgs} mes)`,
+            `**<:next_level:1452305752390766633>** ${nextLevelXP}`,
+            `**<:cooldown:1452305790495887515>** ${cooldown}`
           ].join('\n'))
         )
         .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: memberAvatar } }))
@@ -92,28 +112,57 @@ module.exports = {
     let multiplierInfo = []
 
     if ((!hideMult || multiplierData.role === 0) && multRoles.length) {
-      let xpStr = multiplierData.role > 0 ? `${multiplierData.role}x XP` : "No se puede ganar XP!"
-      let roleMultiplierStr = multRoles.length === 1 ? `${int.guild.id != multRoles[0].id ? `- <@&${multRoles[0].id}>` : "Everyone"} - ${xpStr}` : `- **${multRoles.length} roles** - ${xpStr}`
-      multiplierInfo.push(roleMultiplierStr)
+      for (const role of multRoles) {
+        const xpStr =
+          multiplierData.role > 0
+            ? `${multiplierData.role}x XP`
+            : "No se puede ganar XP!"
+
+        const roleStr =
+          int.guild.id != role.id
+            ? `- <@&${role.id}> - ${xpStr}`
+            : `- Everyone - ${xpStr}`
+
+        multiplierInfo.push(roleStr)
+      }
     }
 
-    let multChannels = multiplierData.channelList
-    if ((!hideMult || multiplierData.channel === 0) && multChannels.length && multiplierData.role > 0 && (multiplierData.role != 1 || multiplierData.channel != 1)) {
-      let chXPStr = multChannels[0].boost > 0 ? `${multiplierData.channel}x XP` : "No se puede ganar XP!"
-      let chMultiplierStr = `- <#${multChannels[0].id}> - ${chXPStr}`
-      multiplierInfo.push(chMultiplierStr)
-      if (multRoles.length) multiplierInfo.push(`- **{multiplier}x XP** (${multiplierModes.channelStacking[multiplierData.channelStacking].toLowerCase()})`)
+    const multChannels = multiplierData.channelList
+    if (
+      (!hideMult || multiplierData.channel === 0) &&
+      multChannels.length &&
+      multiplierData.role > 0 &&
+      (multiplierData.role != 1 || multiplierData.channel != 1)
+    ) {
+      for (const channel of multChannels) {
+        const chXPStr =
+          channel.boost > 0
+            ? `${multiplierData.channel}x XP`
+            : "No se puede ganar XP!"
+
+        multiplierInfo.push(`- <#${channel.id}> - ${chXPStr}`)
+      }
+
+      if (multRoles.length) {
+        multiplierInfo.push(
+          `- **${multiplierData.channel}x XP** (${multiplierModes.channelStacking[multiplierData.channelStacking].toLowerCase()})`
+        )
+      }
     }
 
     if (multiplierInfo.length) {
         container.addSeparatorComponents(new SeparatorBuilder())
             .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**<:buffies:1452368720608366653> Buffies:**\n${multiplierInfo.join("\n")}`))
             .addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(progressBar))
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${estimatedRange} para el siguiente nivel`))
     } else {
         // Siempre mostrar la barra de progreso aunque no haya buffies ni problemas de sincronización
         container.addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent([`${progressBar}`, `${estimatedRange} para el siguiente nivel`].join('\n')));
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(progressBar))
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${estimatedRange} para el siguiente nivel`))
 
         // Y solo mostrar el warning si corresponde
         if (!db.settings.rewardSyncing.noManual && !db.settings.rewardSyncing.noWarning) {

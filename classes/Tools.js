@@ -74,6 +74,14 @@ class Tools {
             return returnRequirement ? { level: lvl, xpRequired, previousLevel } : lvl
         }
 
+        this.getMessages = function(userData) {
+            return userData?.messages || 0
+        }
+
+        this.getMonthlyMessages = function(userData) {
+            return userData?.monthlyMessages || 0
+        }
+
         // calculate xp to reach a level
         this.xpForLevel = function(lvl, settings) {
             if (lvl > settings.maxLevel) lvl = settings.maxLevel
@@ -373,9 +381,8 @@ class Tools {
             return text.join(" ")
         }
 
-        // adds commas to long numbers
-        this.commafy = function(num, locale="en-US") {
-            return num.toLocaleString(locale, { maximumFractionDigits: 10 })
+        this.commafy = function(num) {
+            return num.toLocaleString("en-US", { maximumFractionDigits: 10 }).replace(/,/g, '.');
         }
 
         // convert timestamp to neat string (e.g. "3 minutes")
@@ -401,15 +408,9 @@ class Tools {
         }
 
         // convert timestamp to h:m:s (e.g. 4:20)
-        this.timestamp = function(ms, useTimeIfLong) {
-            if (useTimeIfLong && ms >= 86399000) return this.time(ms, 1) // > 1 day
-            let secs = Math.ceil(Math.abs(ms) / 1000)
-            if (secs < 0) secs = 0
-            let days = Math.floor(secs / 86400)
-            if (days) secs -= days * 86400
-            let timestamp = `${ms < 0 ? "-" : ""}${days ? `${days}d + ` : ""}${[Math.floor(+secs / 3600), Math.floor(+secs / 60) % 60, +secs % 60].map(v => v < 10 ? "0" + v : v).filter((v,i) => v !== "00" || i > 0).join(":")}`
-            if (timestamp.length > 5) timestamp = timestamp.replace(/^0+/, "")
-            return timestamp
+        this.timestamp = function(ms) {
+            let secs = Math.ceil(Math.max(ms, 0) / 1000)
+            return `${secs} seg${secs === 1 ? "" : "s"} de cooldown`
         }
 
         // adds either 's or ' for plural nouns

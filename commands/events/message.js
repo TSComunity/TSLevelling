@@ -16,6 +16,17 @@ async run(client, message, tools) {
 
     // fetch user's xp, or give them 0
     let userData = db.users[author] || { xp: 0, cooldown: 0 }
+
+    userData.messages = (userData.messages || 0) + 1
+    userData.monthlyMessages = (userData.monthlyMessages || 0) + 1
+    
+    await client.db.update(message.guild.id, { 
+        $set: { 
+            [`users.${author}.messages`]: userData.messages,
+            [`users.${author}.monthlyMessages`]: userData.monthlyMessages
+        } 
+    }).exec()
+
     if (userData.cooldown > Date.now()) return // on cooldown, stop here
 
     // check role+channel multipliers, exit if 0x
