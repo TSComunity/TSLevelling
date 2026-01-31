@@ -59,23 +59,22 @@ module.exports = {
 
     let memberAvatar = member.displayAvatarURL()
     let foundCooldown = currentXP.cooldown || 0
-    let cooldown = foundCooldown > Date.now() ? tools.timestamp(foundCooldown - Date.now()) : "Sin Cooldown!"
+    let cooldown = foundCooldown > Date.now() ? tools.timestamp(foundCooldown - Date.now()) : "¡Sin Cooldown!"
 
     function formatMessagesLine(total, monthly) {
-      const icon = "**<:messages:1467163578699354235>** "
-      const maxLength = "67.893 msgs (12.032 mes)".length
+      const maxLength = 28
 
       // Nivel 1: texto completo
-      let text = `**${total} mensajes** (${monthly} este mes)`
-      if (text.length <= maxLength) return icon + text
+      let text = `**${total} ${total > 0 ? 'mensajes' : 'mensaje'}** (${monthly} este mes)`
+      if (text.length <= maxLength) return text
 
       // Nivel 2: compactar "mensajes"
-      text = `**${total} msgs** (${monthly} este mes)`
-      if (text.length <= maxLength) return icon + text
+      text = `**${total} ${total > 0 ? 'msgs' : 'msg'}** (${monthly} este mes)`
+      if (text.length <= maxLength) return text
 
       // Nivel 3: quitar "este"
-      text = `**${total} msgs** (${monthly} mes)`
-      return icon + text
+      text = `**${total} ${total > 0 ? 'msgs' : 'msg'}** (${monthly} mes)`
+      return text
     }
 
     // Crear attachment del banner
@@ -99,7 +98,7 @@ module.exports = {
           new TextDisplayBuilder().setContent([
             `## ${role.emoji} <@&${role.id}>`,
             `**<:XP:1452305794136543263>** **Nivel ${levelData.level}** (${tools.commafy(xp)} XP)`,
-            `**<:messages:1467163578699354235>** **${totalMsgs} ${totalMsgs > 0 ? 'msgs' : 'msg'}** (${monthlyMsgs} mes)`,
+            `**<:messages:1467163578699354235>** ${formatMessagesLine(totalMsgs, monthlyMsgs)}`,
             `**<:next_level:1452305752390766633>** ${nextLevelXP}`,
             `**<:cooldown:1452305790495887515>** ${cooldown}`
           ].join('\n'))
