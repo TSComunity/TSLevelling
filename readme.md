@@ -50,6 +50,6 @@ Proyecto basado en [Polaris Open](https://github.com/GDColon/Polaris-Open), adap
 
 ## 📌 Estado
 
-🟡 **Proyecto terminado · actualmente no está en uso**
+🟡 **Proyecto no terminado · actualmente no está en uso**
 
-El bot fue desarrollado para TSCommunity y podría retomarse en el futuro si la comunidad volviera a activarse.
+El bot fue desarrollado para TSCommunity y podría retomarse en el futuro si las circunstancias lo permiten. 
