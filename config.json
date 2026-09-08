@@ -10,5 +10,11 @@
   "siteURL": "http://localhost:6880",
   
   "changelogURL": "",
-  "supportURL": ""
+  "supportURL": "",
+
+  "roles": {
+    "milestones": {
+      "id": "1470154750145335383"
+    }
+  }
 }

@@ -111,7 +111,7 @@ module.exports = {
         const barSize = 19
         const segmentCount = 4
         let segmentPositions = [];
-        let step = barSize / (segmentCount + 1);
+        let step = 4
         for (let i = 1; i <= segmentCount; i++) {
             segmentPositions.push(Math.round(i * step));
         }
@@ -122,8 +122,8 @@ module.exports = {
         const HYPER        = "<:hypercharge_drop:1467236546317914349>"
         const CHAOS        = "<:chaos_drop:1467279550701375660>"
         const CHAOS_GHOST  = "<:chaos_drop_ghost:1467279548621263052>"
-        const TARGET_USER  = "<:target_user:1467163578699354235>"
-        const BELOW_USER   = "<:below_user:1452368720608366653>"
+        const TARGET_USER  = "<:member:1467596629787021415>"
+        const BELOW_USER   = "<:member:1467596629787021415>"
 
         // ─── CASO 1: Top 1 del servidor ───────────────────────────────────────
         if (isTopOne) {
@@ -254,7 +254,7 @@ module.exports = {
             .addSectionComponents(new SectionBuilder()
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent([
-                        `## ${role.emoji} <@${role.id}> <:top:1467218931793268827> #${userRank || "?"}`,
+                        `## ${role.emoji} <@&${role.id}> <:top:1467967277251956887> #${userRank || "?"}`,
                         `**<:XP:1467192533812645939>** **Nivel ${levelData.level}** (${tools.commafy(xp)} XP)`,
                         `**<:messages:1467163578699354235>** ${formatMessagesLine(totalMsgs, monthlyMsgs)}`,
                         `**<:next_level:1452305752390766633>** ${tools.commafy(levelData.xpRequired - xp)} XP para subir`,

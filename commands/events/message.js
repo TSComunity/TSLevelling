@@ -27,6 +27,14 @@ async run(client, message, tools) {
         } 
     }).exec()
 
+    const milestoneRoleId = config.roles?.milestones?.id
+    if (milestoneRoleId) {
+        const role = message.guild.roles.cache.get(milestoneRoleId)
+        if (role && !message.member.roles.cache.has(milestoneRoleId)) {
+            message.member.roles.add(role).catch(() => {})
+        }
+    }
+
     if (userData.cooldown > Date.now()) return // on cooldown, stop here
 
     // check role+channel multipliers, exit if 0x
