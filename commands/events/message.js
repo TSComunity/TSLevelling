@@ -11,20 +11,20 @@ async run(client, message, tools) {
     let author = message.author.id
     let db = await tools.fetchSettings(author, message.guild.id)
     if (!db || !db.settings?.enabled) return
+
+    await client.monthlyMaintenance(message.guild, db)
+    db = await tools.fetchSettings(author, message.guild.id)
     
     let settings = db.settings
 
     // fetch user's xp, or give them 0
     let userData = db.users[author] || { xp: 0, cooldown: 0 }
 
-    userData.messages = (userData.messages || 0) + 1
-    userData.monthlyMessages = (userData.monthlyMessages || 0) + 1
-    
     await client.db.update(message.guild.id, { 
-        $set: { 
-            [`users.${author}.messages`]: userData.messages,
-            [`users.${author}.monthlyMessages`]: userData.monthlyMessages
-        } 
+        $inc: {
+            [`users.${author}.messages`]: 1,
+            [`users.${author}.monthlyMessages`]: 1
+        }
     }).exec()
 
     const milestoneRoleId = config.roles?.milestones?.id
@@ -48,6 +48,9 @@ async run(client, message, tools) {
 
     if (xpGained > 0) userData.xp += Math.round(xpGained)
     else return
+
+    const awardedXP = Math.round(xpGained)
+    userData.xp = oldXP + awardedXP
     
     // set xp cooldown
     if (settings.gain.time > 0) userData.cooldown = Date.now() + (settings.gain.time * 1000)
@@ -56,7 +59,14 @@ async run(client, message, tools) {
     if (userData.hidden) userData.hidden = false
 
     // database update
-    client.db.update(message.guild.id, { $set: { [`users.${author}`]: userData } }).exec();
+    client.db.update(message.guild.id, {
+        $set: {
+            [`users.${author}.xp`]: userData.xp,
+            [`users.${author}.cooldown`]: userData.cooldown,
+            [`users.${author}.hidden`]: userData.hidden || false
+        },
+        $inc: { [`users.${author}.monthlyXP`]: awardedXP }
+    }).exec();
 
     // check for level up
     let oldLevel = tools.getLevel(oldXP, settings)

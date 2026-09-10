@@ -82,6 +82,10 @@ class Tools {
             return userData?.monthlyMessages || 0
         }
 
+        this.getMonthlyXP = function(userData) {
+            return userData?.monthlyXP || 0
+        }
+
         // calculate xp to reach a level
         this.xpForLevel = function(lvl, settings) {
             if (lvl > settings.maxLevel) lvl = settings.maxLevel

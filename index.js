@@ -17,11 +17,31 @@ const version = require("./json/auto/version.json")
 
 const startTime = Date.now()
 
+const memberCleanupInterval = 6 * 60 * 60 * 1000
+const memberCleanupBatchSize = 500
+const monthlyLogChannelId = "1127922884568957010"
+const importantLogThreadId = "1547719103169564783"
+const staffRoleIds = new Set([
+    "1106553480803516437",
+    "1107345436492185753",
+    "1106553536839422022",
+    "1202685031219200040",
+    "1107329826982989906",
+    "1107331844866846770"
+])
+const memberFetchCacheTime = 6 * 60 * 60 * 1000
+const memberFetchSpacing = 5000
+const memberFetchBatchSize = 1000
+const memberRetentionMinLevel = 15
+const memberFetchState = new Map()
+let memberFetchQueue = Promise.resolve()
+let lastMemberFetch = 0
+
 // create client
 const client = new Discord.Client({
     allowedMentions: { parse: ["users"] },
     makeCache: Discord.Options.cacheWithLimits({ MessageManager: 0 }),
-    intents: ['Guilds', 'GuildMessages', 'DirectMessages', 'GuildVoiceStates'].map(i => Discord.GatewayIntentBits[i]),
+    intents: ['Guilds', 'GuildMembers', 'GuildMessages', 'DirectMessages', 'GuildVoiceStates'].map(i => Discord.GatewayIntentBits[i]),
     partials: ['Channel'].map(p => Discord.Partials[p]),
     failIfNotExists: false
 })
@@ -37,6 +57,320 @@ client.globalTools = new Tools(client);
 
 // connect to db
 client.db = new Model("servers", require("./database_schema.js").schema)
+
+function wait(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+function hasRetainedProgress(userData, settings) {
+    const xp = Number(userData?.xp)
+    const minimumXp = client.globalTools.xpForLevel(memberRetentionMinLevel, settings)
+    return xp >= minimumXp
+}
+
+function fetchMembersForMaintenance(guild) {
+    const cached = memberFetchState.get(guild.id)
+    if (cached?.members && Date.now() - cached.timestamp < memberFetchCacheTime) return Promise.resolve(cached.members)
+    if (cached?.promise) return cached.promise
+
+    const state = cached || {}
+    const request = memberFetchQueue.then(async () => {
+        const spacing = memberFetchSpacing - (Date.now() - lastMemberFetch)
+        if (spacing > 0) await wait(spacing)
+        const members = new Map()
+        let after = "0"
+        let batchCount = 0
+
+        while (true) {
+            batchCount++
+            const batch = await guild.members.list({ limit: memberFetchBatchSize, after })
+            batch.forEach((member, id) => members.set(id, member))
+            if (batch.size < memberFetchBatchSize) break
+
+            const nextAfter = batch.lastKey()
+            if (!nextAfter || nextAfter === after) throw new Error("Member pagination did not advance")
+            after = nextAfter
+            await wait(500)
+        }
+
+        lastMemberFetch = Date.now()
+        state.members = members
+        state.timestamp = lastMemberFetch
+        state.complete = members.size >= guild.memberCount
+        console.info(`Maintenance member scan for ${guild.name}: ${members.size}/${guild.memberCount} members in ${batchCount} batches`)
+        return members
+    }).catch(error => {
+        console.warn(`Could not fetch members for maintenance in ${guild.id}:`, error.message)
+        return null
+    }).finally(() => {
+        state.promise = null
+    })
+
+    state.promise = request
+    memberFetchState.set(guild.id, state)
+    memberFetchQueue = request.then(() => undefined, () => undefined)
+    return request
+}
+
+function getMadridMonth() {
+    const parts = new Intl.DateTimeFormat("en", {
+        timeZone: "Europe/Madrid",
+        year: "numeric",
+        month: "2-digit"
+    }).formatToParts(new Date())
+    const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+    return `${values.year}-${values.month}`
+}
+
+function getMadridParts(date) {
+    const parts = new Intl.DateTimeFormat("en", {
+        timeZone: "Europe/Madrid",
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+    }).formatToParts(date)
+    return Object.fromEntries(parts.map(part => [part.type, part.value]))
+}
+
+function getNextMadridMonthStart() {
+    const current = getMadridParts(new Date())
+    let year = Number(current.year)
+    let month = Number(current.month) + 1
+    if (month === 13) {
+        month = 1
+        year++
+    }
+
+    const utcEstimate = Date.UTC(year, month - 1, 1)
+    for (let offset = -12; offset <= 14; offset++) {
+        const candidate = new Date(utcEstimate - offset * 60 * 60 * 1000)
+        const parts = getMadridParts(candidate)
+        if (parts.year === String(year) && parts.month === String(month).padStart(2, "0") && parts.day === "01" && parts.hour === "00" && parts.minute === "00") return candidate
+    }
+
+    return new Date(utcEstimate)
+}
+
+function scheduleMadridMonthlyRollover() {
+    const target = getNextMadridMonthStart()
+    const delay = Math.max(target.getTime() - Date.now(), 1000)
+    const checkDelay = Math.min(delay, 24 * 60 * 60 * 1000)
+    setTimeout(async () => {
+        if (Date.now() >= target.getTime()) await processMonthlyAllGuilds()
+        scheduleMadridMonthlyRollover()
+    }, checkDelay)
+}
+
+function getSpanishMonthName(period) {
+    return new Intl.DateTimeFormat("es-ES", {
+        timeZone: "Europe/Madrid",
+        month: "long",
+        year: "numeric"
+    }).format(new Date(`${period}-02T12:00:00Z`))
+}
+
+function getMonthlySnapshot(server, members) {
+    const users = Object.entries(server.users || {})
+        .map(([id, data]) => ({ id, data, member: members.get(id) }))
+        .filter(user => (user.data.monthlyXP || 0) > 0)
+
+    users.sort((a, b) =>
+        (b.data.monthlyXP || 0) - (a.data.monthlyXP || 0)
+        || (b.data.monthlyMessages || 0) - (a.data.monthlyMessages || 0))
+    const staff = users.filter(user => user.member?.roles.cache.some(role => staffRoleIds.has(role.id)))
+    const membersTop = users.filter(user => !staff.includes(user))
+    const serialize = entries => entries.slice(0, 10).map(user => ({
+        id: user.id,
+        level: client.globalTools.getLevel(user.data.xp || 0, server.settings),
+        xp: user.data.monthlyXP || 0,
+        messages: user.data.monthlyMessages || 0
+    }))
+
+    return { staff: serialize(staff), members: serialize(membersTop) }
+}
+
+async function logMonthlyTop(guild, snapshot, period) {
+    const [channel, thread] = await Promise.all([
+        client.channels.fetch(monthlyLogChannelId).catch(() => null),
+        client.channels.fetch(importantLogThreadId).catch(() => null)
+    ])
+    const destinations = [channel, thread]
+        .filter(destination => destination?.guild?.id === guild.id && destination.isTextBased())
+        .filter((destination, index, all) => all.findIndex(item => item.id === destination.id) === index)
+    if (destinations.length < 2) return false
+
+    const formatTop = (title, entries) => {
+        const lines = entries.map((user, index) =>
+            `${index + 1}. <@${user.id}> - Nivel ${user.level} - **${client.globalTools.commafy(user.xp)} XP** - ${client.globalTools.commafy(user.messages)} mensajes`)
+        return [`### ${title}`, lines.length ? lines.join("\n") : "-# Sin mensajes registrados"].join("\n")
+    }
+    const monthName = getSpanishMonthName(period)
+
+    const message = {
+        content: [
+            `## Registro mensual - ${monthName}`,
+            formatTop("Top 10 Staff", snapshot.staff),
+            formatTop("Top 10 Miembros", snapshot.members)
+        ].join("\n\n"),
+        allowedMentions: { parse: [] }
+    }
+    const results = await Promise.allSettled(destinations.map(destination => destination.send(message)))
+    return results.every(result => result.status === "fulfilled")
+}
+
+async function logImportant(message) {
+    const thread = await client.channels.fetch(importantLogThreadId).catch(() => null)
+    if (!thread?.isThread() || !thread.isTextBased()) return
+    await thread.send({ content: `-# ${message}`, allowedMentions: { parse: [] } }).catch(() => {})
+}
+
+async function logCleanup(guild, message) {
+    const [channel, thread] = await Promise.all([
+        client.channels.fetch(importantLogThreadId).catch(() => null)
+    ])
+    const destinations = [channel, thread]
+        .filter(destination => destination?.guild?.id === guild.id && destination.isTextBased())
+        .filter((destination, index, all) => all.findIndex(item => item.id === destination.id) === index)
+    await Promise.allSettled(destinations.map(destination => destination.send({
+        content: `-# Limpieza de **${guild.name}**: ${message}`,
+        allowedMentions: { parse: [] }
+    })))
+}
+
+const monthlyMaintenanceLocks = new Set()
+async function processMonthlyMessages(guild, knownServer, knownMembers) {
+    if (monthlyMaintenanceLocks.has(guild.id)) return
+    monthlyMaintenanceLocks.add(guild.id)
+
+    try {
+        const server = knownServer || await client.db.fetch(guild.id).exec()
+        if (!server?.users) return
+
+        const currentPeriod = getMadridMonth()
+        const previousPeriod = server.info?.monthlyMessagesPeriod
+        if (previousPeriod === currentPeriod) return
+
+        const members = knownMembers || await fetchMembersForMaintenance(guild)
+        if (!members) return
+        if (!previousPeriod) {
+            await client.db.update(guild.id, {
+                $set: { "info.monthlyMessagesPeriod": currentPeriod }
+            }).exec()
+            return
+        }
+
+        const monthlyTop = getMonthlySnapshot(server, members)
+        if (!await logMonthlyTop(guild, monthlyTop, previousPeriod)) return
+
+        const resetUsers = Object.keys(server.users)
+        for (let index = 0; index < resetUsers.length; index += memberCleanupBatchSize) {
+            const batch = resetUsers.slice(index, index + memberCleanupBatchSize)
+            const updates = Object.fromEntries(batch.flatMap(userId => [
+                [`users.${userId}.monthlyMessages`, 0],
+                [`users.${userId}.monthlyXP`, 0]
+            ]))
+            await client.db.update(guild.id, {
+                $set: updates
+            }).exec()
+        }
+
+        await client.db.update(guild.id, {
+            $set: {
+                "info.monthlyMessagesPeriod": currentPeriod,
+                "info.monthlyTop": { period: previousPeriod, ...monthlyTop }
+            }
+        }).exec()
+    } finally {
+        monthlyMaintenanceLocks.delete(guild.id)
+    }
+}
+
+client.monthlyMaintenance = processMonthlyMessages
+
+async function processMonthlyAllGuilds() {
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            await processMonthlyMessages(guild)
+        } catch (error) {
+            console.warn(`Could not process monthly leaderboard for ${guild.id}:`, error.message)
+        }
+    }
+}
+
+async function cleanZeroXpMembers(guild) {
+    const members = await fetchMembersForMaintenance(guild)
+    if (!members || !members.size) {
+        console.warn(`Skipping cleanup for ${guild.id}: Discord returned no members`)
+        return
+    }
+    const memberScan = memberFetchState.get(guild.id)
+    if (!memberScan?.complete) {
+        console.warn(`Skipping cleanup for ${guild.id}: member scan was incomplete (${members.size}/${guild.memberCount})`)
+        await logCleanup(guild, `omitida por seguridad: escaneo incompleto (**${members.size}/${guild.memberCount}** miembros).`)
+        return
+    }
+
+    await processMonthlyMessages(guild, null, members)
+    const server = await client.db.fetch(guild.id).exec()
+    if (!server?.users) return
+
+    const zeroXpUsers = Object.entries(server.users)
+        .filter(([userId, userData]) => !members.has(userId) && !hasRetainedProgress(userData, server.settings))
+        .map(([userId]) => userId)
+    const preservedXpUsers = Object.entries(server.users)
+        .filter(([userId, userData]) => !members.has(userId) && hasRetainedProgress(userData, server.settings))
+        .length
+    const retentionXp = client.globalTools.xpForLevel(memberRetentionMinLevel, server.settings)
+
+    console.info(`Cleanup check for ${guild.name}: ${Object.keys(server.users).length} stored, ${members.size} current, ${zeroXpUsers.length} below ${retentionXp} XP, ${preservedXpUsers} absent users with XP preserved`)
+    if (zeroXpUsers.length) {
+        await logCleanup(guild, `encontrados **${zeroXpUsers.length}** registros ausentes con 0 XP; conservados **${preservedXpUsers}** ausentes con XP.`)
+    } else if (preservedXpUsers) {
+        await logCleanup(guild, `no hay registros ausentes con 0 XP; conservados **${preservedXpUsers}** usuarios ausentes con XP.`)
+    }
+
+    if (memberFetchState.get(guild.id) !== memberScan) {
+        console.warn(`Skipping cleanup for ${guild.id}: membership changed during scan`)
+        await logCleanup(guild, "omitida por seguridad: la pertenencia al servidor cambió durante el escaneo.")
+        return
+    }
+
+    for (let index = 0; index < zeroXpUsers.length; index += memberCleanupBatchSize) {
+        const batch = zeroXpUsers.slice(index, index + memberCleanupBatchSize)
+        const unsetUsers = Object.fromEntries(batch.map(userId => [`users.${userId}`, 1]))
+        await client.db.update(guild.id, { $unset: unsetUsers }).exec()
+    }
+
+    if (zeroXpUsers.length) {
+        console.info(`Cleaned ${zeroXpUsers.length} zero-XP users from ${guild.name}`)
+        const remainingServer = await client.db.fetch(guild.id).exec()
+        const remaining = Object.entries(remainingServer?.users || {})
+            .filter(([userId, userData]) => !members.has(userId) && !hasRetainedProgress(userData, remainingServer.settings)).length
+        await logCleanup(guild, `eliminados **${zeroXpUsers.length}**; pendientes tras verificar: **${remaining}**.`)
+    }
+}
+
+let memberCleanupRunning = false
+async function cleanAllGuilds() {
+    if (memberCleanupRunning) return
+    memberCleanupRunning = true
+
+    try {
+        await logImportant(`Inicio de limpieza: comprobando **${client.guilds.cache.size}** servidores.`)
+        for (const guild of client.guilds.cache.values()) {
+            try {
+                await cleanZeroXpMembers(guild)
+            } catch (error) {
+                console.warn(`Could not clean zero-XP users from ${guild.id}:`, error.message)
+            }
+        }
+    } finally {
+        memberCleanupRunning = false
+    }
+}
 
 // command files
 const dir = "./commands/"
@@ -73,6 +407,13 @@ client.on("clientReady", () => {
     client.updateStatus()
     setInterval(client.updateStatus, 15 * 60000);
 
+    const cleanupDelay = 30_000 + Math.floor(Math.random() * 90_000)
+    setTimeout(() => {
+        cleanAllGuilds()
+        setInterval(cleanAllGuilds, memberCleanupInterval)
+    }, cleanupDelay)
+    scheduleMadridMonthlyRollover()
+
     // run the web server
     if (client.shard.id == 0 && config.enableWebServer) require("./web_app.js")(client)
 })
@@ -82,6 +423,26 @@ client.on("messageCreate", async message => {
     if (message.system || message.author.bot) return
     else if (!message.guild || !message.member) return // dm stuff
     else client.commands.get("message").run(client, message, client.globalTools)
+})
+
+client.on("guildMemberRemove", async member => {
+    memberFetchState.delete(member.guild.id)
+    try {
+        const server = await client.db.fetch(member.guild.id).exec()
+        const userData = server?.users?.[member.id]
+        if (!userData || hasRetainedProgress(userData, server.settings)) return
+
+        await client.db.update(member.guild.id, {
+            $unset: { [`users.${member.id}`]: 1 }
+        }).exec()
+        await logCleanup(member.guild, `eliminado **1** registro de **0 XP** tras salir el usuario.`)
+    } catch (error) {
+        console.warn(`Could not clean zero-XP data for ${member.id}:`, error)
+    }
+})
+
+client.on("guildMemberAdd", member => {
+    memberFetchState.delete(member.guild.id)
 })
 
 // on interaction

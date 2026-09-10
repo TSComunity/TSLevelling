@@ -134,6 +134,8 @@ const schema = {
     settings: settingsObj,
     info: {
         lastUpdate: { type: Number, default: 0 },
+        monthlyMessagesPeriod: { type: String, default: "" },
+        monthlyTop: { type: Object, default: {} },
     }
 }
 
